@@ -9,6 +9,7 @@
   "dependencies": {
     "@harperfast/rocksdb-js": "^2.7.1",
     "@heroui/react": "^2.8.4",
+    "mermaid": "^11.17.0",
     "next": "15.5.4",
     "react": "19.1.1",
     "react-dom": "19.1.1"
@@ -21,7 +22,7 @@
     "@types/node": "24.5.2"
   },
   "version": "0.1.0",
-  "description": "Pergunta pra uma pessoa e espera a resposta, de dentro de um script. Quatro sa\u00eddas: escolheu, pulou, expirou, erro.",
+  "description": "Pergunta pra uma pessoa e espera a resposta, de dentro de um script. Quatro saídas: escolheu, pulou, expirou, erro.",
   "license": "MIT",
   "repository": {
     "type": "git",

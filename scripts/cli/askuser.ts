@@ -51,12 +51,19 @@ const USO = `askuser — pergunta pra uma pessoa e espera a decisão
   -t, --minutos   quanto ela vive antes de expirar (padrão 30)
       --json      só o JSON, sem a linha legível
 
-  spec: {"perguntas":[{"question","header","multiSelect"?,"options":[{"label","description"?,"preview"?}]}]}
+  spec: {"perguntas":[{"question","header","description"?,"multiSelect"?,"options":[{"label","description"?,"preview"?}]}]}
 
   saída: 0 escolheu · 2 pulou · 3 expirou · 1 erro`
 
 type Opcao = { label: string; description?: string; preview?: string }
-type Pergunta = { question: string; header: string; options: Opcao[]; multiSelect?: boolean }
+type Pergunta = {
+  question: string
+  header: string
+  /** O que está em jogo, até 7 palavras. Aparece na lista lateral. */
+  description?: string
+  options: Opcao[]
+  multiSelect?: boolean
+}
 
 /** `label|descrição`. A PRIMEIRA barra separa — label com barra continua inteiro. */
 function parseOpcao(s: string): Opcao {

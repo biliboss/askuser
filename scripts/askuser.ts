@@ -56,6 +56,19 @@ export type Opcoes = Partial<Tamanho> & {
    * monitor lateral, onde roubar foco atrapalharia mais do que ajuda.
    */
   alwaysOnTop?: boolean
+  /**
+   * Padrão `false`: **com a moldura do sistema**.
+   *
+   * Foi testado sem (19/08) e voltou. Sem barra a janela fica bonita e fica
+   * PRESA: não há como arrastá-la, porque a tela é servida pelo Next e não pelo
+   * Neutralino — não existe `-webkit-app-region: drag` aqui, e mover a janela
+   * pediria a API nativa, que está desligada de propósito. Uma janela que sobe
+   * por cima e não sai do lugar é pior que uma barra de título feia.
+   *
+   * `true` tira a moldura. Serve pra quiosque, ou pra uma tela que ninguém
+   * precisa mover.
+   */
+  borderless?: boolean
 }
 
 /** O processo do Neutralino. `kill()` fecha a janela; `exited` é a promessa do fim. */

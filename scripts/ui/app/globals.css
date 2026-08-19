@@ -11,3 +11,30 @@
 /* O tema segue o SISTEMA. Uma janela que pergunta não é hora de discordar do
    modo escuro de quem está olhando. */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/* A CHEGADA. A janela sobe na frente do que a pessoa estava fazendo, e sem um
+   sinal de "isto é novo" ela lê como algo que já estava ali — o olho não sabe
+   onde pousar. Duas pulsações curtas na borda resolvem sem custar tempo: a
+   animação termina antes de qualquer um conseguir responder.
+
+   Só na rodada ATIVA, e só uma vez: repetir seria uma tela piscando, que é o
+   contrário de um convite. */
+@keyframes chegou {
+  0%   { transform: scale(0.98); opacity: 0; }
+  60%  { transform: scale(1);    opacity: 1; }
+}
+@keyframes pisca-borda {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--heroui-primary) / 0); }
+  50%      { box-shadow: 0 0 0 4px hsl(var(--heroui-primary) / 0.35); }
+}
+.rodada-chegou {
+  animation:
+    chegou 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    pisca-borda 520ms ease-in-out 220ms 2;
+}
+
+/* Reduzir movimento é pedido, não preferência: a animação some inteira e a
+   janela aparece pronta. O sinal de "isto é novo" aqui é a própria janela. */
+@media (prefers-reduced-motion: reduce) {
+  .rodada-chegou { animation: none; }
+}

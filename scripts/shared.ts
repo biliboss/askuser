@@ -8,7 +8,7 @@
 //! BAIXO garante que o app HTTP existe pra alguém perguntar.
 
 import type { Opcoes } from './askuser.ts'
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** A tela que a janela abre. Env primeiro: a máquina que MOSTRA não é sempre a que serve. */
@@ -61,7 +61,13 @@ export function escreveConfig(o: Opcoes): void {
             // aba de navegador com bordas diferentes.
             alwaysOnTop: o.alwaysOnTop ?? true,
             enableInspector: false,
-            borderless: false,
+            // COM a moldura do sistema. Testado sem, em 19/08, e voltou: sem
+            // barra a janela não tem por onde ser arrastada — a tela vem do Next
+            // e não do Neutralino, então não existe `-webkit-app-region: drag`
+            // aqui, e mover pediria a API nativa, que está desligada de
+            // propósito. Janela que sobe por cima e não sai do lugar é pior que
+            // uma barra de título feia.
+            borderless: o.borderless ?? false,
             maximize: false,
             hidden: false,
             resizable: true,
@@ -82,28 +88,35 @@ export function escreveConfig(o: Opcoes): void {
  * A ALTURA que a rodada precisa, em pixels. **Medida com o qa-drive em 19/08**,
  * não estimada.
  *
- * A janela nasceu com 460 fixos, e a régua mostrou o que isso custava:
+ * A janela nasceu com 460 fixos, e a régua mostrou o custo — empilhando as
+ * perguntas numa coluna, o card crescia 421px por pergunta (506 · 927 · 1348 ·
+ * 1769). Uma rodada de duas já abria com `confirmar` e `pular` fora da tela: 4
+ * dos 9 botões visíveis.
  *
- * | perguntas (4 opções cada) | card |
- * |---|---|
- * | 1 | 506 |
- * | 2 | 927 |
- * | 3 | 1348 |
- * | 4 | 1769 |
+ * **A soma morreu junto com o empilhamento.** Com uma pergunta em foco e as
+ * outras na lista lateral, a altura é a da MAIOR pergunta — quatro perguntas
+ * custam o mesmo que a mais alta delas. É a razão de layout que mais economiza
+ * tela aqui, e por isso o cálculo é `max`, não `reduce`.
  *
- * Linear: 421 por pergunta — 62 por opção, 173 de moldura (enunciado, "Other",
- * nota, divisor). Com 460 fixos, uma rodada de DUAS perguntas abria com
- * `confirmar` e `pular` fora da tela: 4 dos 9 botões visíveis. A pessoa não vê o
- * que fazer com o que acabou de escolher, e esta janela existe pra ser
- * respondida de primeira.
- *
- * O TETO de 900 é real: quatro perguntas pedem 1769px e nenhuma tela de laptop
- * tem isso sobrando. Passou do teto, a rodada rola — e rolar é melhor que uma
- * janela maior que a tela, que não dá pra arrastar de volta.
+ * O teto de 900 fica de pé pro caso extremo (4 opções longas com `preview`), e
+ * ali a pergunta rola dentro do card. Rolar é melhor que uma janela maior que a
+ * tela, que não dá pra arrastar de volta.
  */
-export function alturaPara(perguntas: { options: unknown[] }[]): number {
-  const conteudo = perguntas.reduce((s, p) => s + 173 + 62 * p.options.length, 0)
-  return Math.min(900, 48 + 70 + conteudo + 60)
+export function alturaPara(perguntas: { options: { preview?: string }[] }[]): number {
+  // Régua de 19/08 no layout com foco: 1 pergunta com 2/3/4 opções (label +
+  // description) mediu 491 / 569 / 647 de página. Reta perfeita — 78 por opção,
+  // 335 de moldura (origem, prazo, enunciado, os dois campos livres, os botões).
+  const alturaDe = (p: { options: { preview?: string }[] }) =>
+    335 +
+    78 * p.options.length +
+    // PREVIEW é a única coisa que o número de opções não prevê: um diagrama
+    // mermaid ocupa o que ocupa. 200 por opção com preview é o suficiente pros
+    // desenhos de 3-4 nós que cabem numa decisão; maior que isso, rola.
+    200 * p.options.filter((o) => o.preview).length
+
+  // A lista lateral não soma — ela é mais curta que qualquer pergunta. E as
+  // perguntas não somam entre si: só uma fica em foco.
+  return Math.min(900, Math.max(...perguntas.map(alturaDe)))
 }
 
 /**
@@ -181,6 +194,49 @@ export async function vivo(ms = 800): Promise<boolean> {
  */
 export async function garanteApp(): Promise<string | null> {
   if (await vivo()) return null
+
+  // TRAVA ENTRE PROCESSOS antes de subir nada. Duas perguntas disparadas ao mesmo
+  // tempo veem "não responde" no mesmo instante e sobem DOIS Next; o segundo
+  // morre no lock do RocksDB com "IO error: While lock file: … Resource
+  // temporarily unavailable" — uma mensagem que não diz nada sobre a causa.
+  // Medido em 19/08, e o custo é o pior: a pergunta simplesmente não acontece.
+  //
+  // `wx` é a trava: criar falha se o arquivo existe, e isso é atômico no
+  // sistema de arquivos. Quem perde a corrida não sobe nada — só espera o
+  // vencedor responder, que é o que ele queria desde o começo.
+  const trava = join(APP, 'subindo.lock')
+  let euSubo = false
+  try {
+    mkdirSync(APP, { recursive: true })
+    writeFileSync(trava, String(process.pid), { flag: 'wx' })
+    euSubo = true
+  } catch {
+    // Trava de um processo que MORREU no meio ficaria pra sempre, e aí ninguém
+    // sobe o app nunca mais. Meio minuto é mais que o dobro do boot medido.
+    const idade = Date.now() - (statSync(trava, { throwIfNoEntry: false })?.mtimeMs ?? 0)
+    if (idade > 30_000) {
+      rmSync(trava, { force: true })
+      return garanteApp()
+    }
+  }
+
+  if (!euSubo) {
+    for (let i = 0; i < 60; i++) {
+      if (await vivo(500)) return null
+      await Bun.sleep(500)
+    }
+    return `outro processo está subindo o app e ele não respondeu em 30s`
+  }
+
+  try {
+    return await sobeApp()
+  } finally {
+    rmSync(trava, { force: true })
+  }
+}
+
+/** Sobe o Next e espera responder. Só é chamado por quem ganhou a trava. */
+async function sobeApp(): Promise<string | null> {
 
   // `next start` EXIGE um build. Sem isto ele sai na hora e a espera abaixo
   // gastaria os 30s inteiros pra reportar um timeout que na verdade é "faltou

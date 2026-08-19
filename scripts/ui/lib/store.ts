@@ -47,6 +47,17 @@ export type Pergunta = {
   question: string
   /** O chip que rotula a pergunta na tela. Até 12 caracteres. */
   header: string
+  /**
+   * O que está em jogo, em **até 7 palavras**. Aparece na lista lateral, embaixo
+   * do `header`.
+   *
+   * Ela existe porque o `header` sozinho é curto demais pra dizer o que a
+   * pergunta decide: "banco" não conta que a escolha é de dependência. Sete
+   * palavras é o teto e não é arbitrário — é o que cabe numa linha da lista sem
+   * quebrar, e a lista deixa de ser escaneável no instante em que um item vira
+   * duas linhas.
+   */
+  description?: string
   /** 2 a 4. Menos é `enter` disfarçado; mais é a pessoa lendo em vez de decidir. */
   options: Opcao[]
   /** `true` quando as opções não são mutuamente exclusivas. */
@@ -79,7 +90,7 @@ export type Rodada = {
 }
 
 /** Os tetos do contrato. Não são sugestão: `abre()` recusa fora deles. */
-export const LIMITES = { perguntas: 4, opcoes: 4, header: 12 } as const
+export const LIMITES = { perguntas: 4, opcoes: 4, header: 12, palavrasDaDescricao: 7 } as const
 
 // ─── O BANCO ───────────────────────────────────────────────────────────────────
 
@@ -147,6 +158,11 @@ export function critica(perguntas: Pergunta[]): string | null {
     if (!p.header?.trim()) return `"${p.question}": falta o header`
     if (p.header.length > LIMITES.header)
       return `header "${p.header}" tem ${p.header.length} chars: o teto é ${LIMITES.header}`
+    // Recusar em vez de truncar: truncando, quem escreveu não descobre que a
+    // frase não coube — descobre quem lê, com a metade que sobrou.
+    const palavras = p.description?.trim().split(/\s+/).filter(Boolean).length ?? 0
+    if (palavras > LIMITES.palavrasDaDescricao)
+      return `"${p.question}": a description tem ${palavras} palavras, o teto é ${LIMITES.palavrasDaDescricao}`
     // DUAS é o piso: uma opção só é um `enter` disfarçado de decisão, e ela
     // interrompe alguém pra nada.
     if (!p.options || p.options.length < 2)
