@@ -82,9 +82,6 @@ cd scripts/ui && bun install && bun run start     # 5311
 Uma peça só: Next com RocksDB embutido, sem Docker e sem daemon. O banco nasce
 sozinho em `scripts/ui/.data/askuser`.
 
-Janela desktop, opcional — `scripts/desktop/`, uma casca que abre a mesma tela
-sempre por cima.
-
 ## Quando NÃO usar
 
 - **Pra avisar.** Isto bloqueia; notificação não bloqueia.

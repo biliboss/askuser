@@ -16,7 +16,6 @@ scripts/
     lib/usePerguntas  SSE + refetch
     app/page.tsx      a tela
     app/api/…         GET · POST · PATCH, e o SSE
-  desktop/            a casca Tauri: uma janela always-on-top que abre a tela
 ```
 
 **O `cli/` não importa nada do `ui/`.** Ele fala HTTP com o app, e é por isso que

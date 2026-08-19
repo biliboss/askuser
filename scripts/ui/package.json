@@ -4,9 +4,7 @@
   "scripts": {
     "dev": "next dev -p 5311",
     "build": "next build",
-    "start": "next start -p 5311",
-    "app": "cd src-tauri && cargo run --release",
-    "app:build": "cd src-tauri && cargo build --release"
+    "start": "next start -p 5311"
   },
   "dependencies": {
     "@harperfast/rocksdb-js": "^2.7.1",
