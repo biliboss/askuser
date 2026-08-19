@@ -124,10 +124,14 @@ function CardRodada({
         <div className="flex w-full items-center justify-between gap-3">
           <div className="flex flex-wrap gap-1.5">
             {/* A ORIGEM na tela é o que impede decidir sobre estado que já mudou:
-                saber QUE agente, em que run, é metade do contexto. */}
-            {rodada.origem.agente && <Chip size="sm" variant="dot">{rodada.origem.agente}</Chip>}
-            {rodada.origem.run && <Chip size="sm" variant="dot">{rodada.origem.run}</Chip>}
-            {rodada.origem.pane && <Chip size="sm" variant="dot">{rodada.origem.pane}</Chip>}
+                saber QUE agente, em que run, é metade do contexto.
+
+                O `?.` cobre o que JÁ está gravado sem `origem` — a normalização
+                em `abre()` só vale pra rodada nova, e registro velho não se
+                reescreve sozinho. */}
+            {rodada.origem?.agente && <Chip size="sm" variant="dot">{rodada.origem.agente}</Chip>}
+            {rodada.origem?.run && <Chip size="sm" variant="dot">{rodada.origem.run}</Chip>}
+            {rodada.origem?.pane && <Chip size="sm" variant="dot">{rodada.origem.pane}</Chip>}
           </div>
           <Chip size="sm" variant="flat" color={falta ? 'default' : 'danger'}>
             {falta ?? 'vencida'}

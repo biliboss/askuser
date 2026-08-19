@@ -27,7 +27,7 @@
 //! A tese do projeto é "uma peça, sem dependência pesada". Os dois primeiros
 //! contradiziam a tese pra entregar uma janela.
 
-import { APP, escreveConfig, garanteBinarios } from './shared.ts'
+import { APP, binarioDaMaquina, escreveConfig, garanteBinarios } from './shared.ts'
 
 // ─── O CONTRATO ────────────────────────────────────────────────────────────────
 
@@ -90,7 +90,17 @@ export async function askuser(opcoes: Opcoes = {}): Promise<Janela> {
   escreveConfig(opcoes)
   const erro = await garanteBinarios()
   if (erro) throw new Error(`askuser: binarios-nao-baixaram — ${erro}`)
-  return Bun.spawn(['bunx', '--bun', '@neutralinojs/neu', 'run'], { cwd: APP, stdout: 'inherit', stderr: 'inherit' })
+  // O BINÁRIO, não `neu run`: o wrapper escrevia log no stdout de quem chamou e
+  // sobrevivia ao `kill()` deixando a janela na tela. `binarioDaMaquina()` conta
+  // as duas provas.
+  //
+  // `stdout: 'ignore'` porque quem chama isto pode estar imprimindo JSON — e a
+  // janela não tem nada a dizer que valha sujar a saída de alguém.
+  return Bun.spawn([binarioDaMaquina(), '--load-dir-res', '--path=.'], {
+    cwd: APP,
+    stdout: 'ignore',
+    stderr: 'inherit',
+  })
 }
 
 /**

@@ -10,3 +10,6 @@ gen/
 next-env.d.ts
 scripts/.desktop/
 scripts/node_modules/
+
+# sessões do qa-drive — handles e gravações de CDP, não código
+.qa-drive/

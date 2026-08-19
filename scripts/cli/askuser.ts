@@ -34,6 +34,9 @@
  *     {"estado":"ANSWERED","respostas":{"Disparo?":{"escolhas":["faz"]}}}
  */
 
+import { askuser as abreJanela } from '../askuser.ts'
+import { alturaPara, garanteApp } from '../shared.ts'
+
 const APP = process.env.ASKUSER_URL ?? 'http://127.0.0.1:5311'
 
 const USO = `askuser — pergunta pra uma pessoa e espera a decisão
@@ -146,14 +149,33 @@ export async function main(argv: string[]): Promise<number> {
     host: process.env.HOSTNAME ?? process.env.HOST,
   }
 
+  // O APP SOBE SOZINHO. Um agente num pane que ninguém olha não tem quem execute
+  // um "suba o servidor antes" — e enquanto o app fora do ar fosse a causa mais
+  // provável de `1`, essa saída não distinguia nada.
+  const falha = await garanteApp()
+  if (falha) return morre(`não consegui garantir o app em ${APP}\n  ${falha}`)
+
   let id: string
   try {
     id = ((await api('POST', { perguntas, origem, vidaMs: minutos * 60_000 })) as { id: string }).id
   } catch (e) {
     // "NÃO CONSEGUI PERGUNTAR" sai diferente de "perguntei e ninguém respondeu".
     // Sem essa distinção, um app fora do ar vira decisão fantasma.
-    return morre(`não consegui abrir a rodada em ${APP}\n  ${(e as Error).message}\n  o app está de pé? \`cd scripts/ui && bun run start\``)
+    return morre(`não consegui abrir a rodada em ${APP}\n  ${(e as Error).message}`)
   }
+
+  // A JANELA sobe DEPOIS da rodada existir, senão ela abriria em "nada pendente"
+  // e a pessoa veria a pergunta aparecer sozinha meio segundo depois.
+  //
+  // `ASKUSER_NO_WINDOW` existe pro caso sem tela — CI, máquina remota, e o
+  // próprio teste desta borda. Perguntar continua funcionando: a janela é
+  // superfície, e o navegador serve a mesma tela.
+  //
+  // A ALTURA sai da RODADA, não de um número fixo: a janela de 460 fixos abria
+  // uma rodada de duas perguntas com `confirmar` fora da tela.
+  const janela = process.env.ASKUSER_NO_WINDOW
+    ? null
+    : await abreJanela({ height: alturaPara(perguntas) }).catch(() => null)
 
   // POLLING de 1s. O processo já está bloqueado; um segundo é imperceptível pra
   // quem decide. O VENCIMENTO não depende de nada rodando: `expiraEm` está
@@ -164,7 +186,10 @@ export async function main(argv: string[]): Promise<number> {
       respostas?: Record<string, { escolhas: string[]; outro?: string; anotacao?: string }>
     }
     if (r.estado !== 'OPEN') {
-      const saida = { id, estado: r.estado, respostas: r.respostas ?? {}, pulou: r.estado === 'SKIPPED', expirou: r.estado === 'EXPIRED' }
+      // A janela FECHA com a decisão. Ela sobe por pergunta e morre com ela —
+      // deixá-la viva depois seria um retângulo por cima de tudo sem nada dentro.
+      janela?.kill()
+      const saida ={ id, estado: r.estado, respostas: r.respostas ?? {}, pulou: r.estado === 'SKIPPED', expirou: r.estado === 'EXPIRED' }
       if (json) console.log(JSON.stringify(saida))
       else if (r.estado === 'ANSWERED')
         for (const [q, resp] of Object.entries(saida.respostas))

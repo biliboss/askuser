@@ -164,7 +164,8 @@ export function critica(perguntas: Pergunta[]): string | null {
 
 export async function abre(args: {
   perguntas: Pergunta[]
-  origem: Origem
+  /** Ausente vira `{}`. Perguntar sem dizer quem é DEVE funcionar — um `curl` é um chamador legítimo. */
+  origem?: Origem
   vidaMs?: number
 }): Promise<Rodada> {
   const erro = critica(args.perguntas)
@@ -174,7 +175,12 @@ export async function abre(args: {
   const r: Rodada = {
     id: crypto.randomUUID(),
     perguntas: args.perguntas,
-    origem: args.origem,
+    // NORMALIZA AQUI, e não na tela: `abre()` é por onde todo chamador passa.
+    // Medido em 19/08 com o qa-drive — um POST sem `origem` gravava
+    // `origem: undefined`, e a tela morria inteira em "Cannot read properties of
+    // undefined (reading 'agente')". Não era o card daquela rodada: era a página,
+    // com TODAS as outras perguntas dentro dela.
+    origem: args.origem ?? {},
     estado: 'OPEN',
     criadaEm: agora,
     expiraEm: agora + (args.vidaMs ?? 30 * 60_000),
