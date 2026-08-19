@@ -1,6 +1,6 @@
 ---
 name: askuser
-description: Pergunta pra uma PESSOA de dentro de um script e espera a decisão. Use quando um processo automatizado precisa de uma escolha humana e não pode simplesmente supor — a pergunta aparece numa tela que a pessoa está olhando, e o comando bloqueia até haver resposta. Quatro saídas: escolheu (0), pulou (2), expirou (3), erro (1).
+description: "Pergunta pra uma PESSOA de dentro de um script e espera a decisão. Use quando um processo automatizado precisa de uma escolha humana e não pode simplesmente supor — a pergunta aparece numa tela que a pessoa está olhando, e o comando bloqueia até haver resposta. Quatro saídas: escolheu (0), pulou (2), expirou (3), erro (1)."
 ---
 
 # askuser
