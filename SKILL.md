@@ -42,10 +42,41 @@ case $? in
 esac
 ```
 
+## Até QUATRO perguntas por chamada
+
+Uma interrupção, N decisões. Quem interrompe alguém deveria gastar a interrupção
+inteira de uma vez, não quatro vezes seguidas.
+
+```bash
+askuser --spec '{"perguntas":[
+  {"question":"Qual banco?","header":"Banco","options":[
+     {"label":"RocksDB","description":"embutido","preview":"db.put(k,v)"},
+     {"label":"SQLite","description":"embutido, SQL"}]},
+  {"question":"Quais telas?","header":"Telas","multiSelect":true,"options":[
+     {"label":"navegador"},{"label":"celular"}]}]}' --json
+```
+
+A resposta vem endereçada pelo TEXTO da pergunta:
+
+```json
+{"estado":"ANSWERED","respostas":{
+  "Qual banco?":{"escolhas":["RocksDB"],"anotacao":"cabe na tese"},
+  "Quais telas?":{"escolhas":["navegador","celular"]}}}
+```
+
+**Ou tudo, ou nada.** Responder três de quatro é recusado — quem pediu as quatro
+precisa das quatro.
+
 ## As opções
 
-`-o "<rótulo>|<descrição>"`, repetido. **Mínimo duas** — uma opção só é um
-`enter` disfarçado de decisão, e o comando recusa.
+`-o "<label>|<descrição>"`, repetido. **2 a 4**, e os dois lados recusam: uma só
+é um `enter` disfarçado de decisão; cinco é a pessoa lendo em vez de decidir.
+
+`preview` mostra mockup/snippet lado a lado — só em escolha única, porque com
+multiSelect não existe "o preview do que está focado".
+
+**"Other" existe sempre**, sem o chamador pedir: é a saída pra quando nenhuma
+opção descreve a realidade. Sem ela, a pessoa escolhe a menos errada.
 
 A descrição é onde vai a CONSEQUÊNCIA, não o sinônimo do rótulo. Compare:
 
@@ -58,9 +89,14 @@ A descrição é onde vai a CONSEQUÊNCIA, não o sinônimo do rótulo. Compare:
 
 | flag | o que faz |
 |---|---|
-| `-o, --opcao` | uma opção; repita. Mínimo 2 |
+| `-o, --opcao` | uma opção; repita. 2 a 4 |
+| `-H, --header` | o chip da pergunta (≤12 chars). Omitido, sai da pergunta |
+| `-m, --multi` | as opções não são mutuamente exclusivas |
+| `--spec` | o contrato inteiro em JSON: até 4 perguntas |
 | `-t, --minutos` | quanto ela vive antes de expirar (padrão 30) |
 | `--json` | só o JSON, sem a linha legível |
+
+Atalhos na tela: `1-4` escolhe · `⌘N` próxima pergunta · `⏎` confirma · `esc` pula.
 
 ## O ambiente
 

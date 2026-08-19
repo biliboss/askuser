@@ -1,60 +1,90 @@
 //! O banco: RocksDB embutido no processo do Next. Sem serviço, sem Docker.
 //!
+//! ## A unidade é a RODADA, não a pergunta
+//!
+//! Uma chamada carrega de 1 a 4 perguntas, e elas são respondidas JUNTAS. Isso é
+//! do contrato do `AskUserQuestion` e não é detalhe: quem interrompe alguém
+//! deveria gastar a interrupção inteira de uma vez, não quatro vezes seguidas.
+//!
+//! A consequência de forma: o registro no disco é a rodada. `estado`, `expiraEm`
+//! e `origem` são DELA — as quatro perguntas vencem juntas, e não existe rodada
+//! meio respondida. Fazer isso depois de ter dados no disco custaria migração, e
+//! é por isso que veio antes de qualquer outra coisa.
+//!
 //! ## Por que embutido e não um serviço
 //!
 //! A versão anterior tinha Convex (Docker) e Inngest (binário). Três processos
 //! pra uma pergunta existir, e a consequência é dura: se qualquer um estivesse
 //! fora, o agente não perguntava. Aqui o banco é uma pasta no disco e vive
-//! dentro do mesmo processo que serve a tela — se o Next está de pé, perguntar
-//! funciona. Não há segunda peça pra estar fora.
+//! dentro do mesmo processo que serve a tela.
 //!
 //! ## O tempo, sem workflow durável
 //!
-//! O Inngest existia pra uma coisa: expirar pergunta que ninguém respondeu. O
-//! argumento contra `setTimeout` era real — o timer morre com o processo, e as
-//! perguntas ficariam abertas pra sempre.
-//!
-//! A resposta aqui não é um timer melhor: é NÃO DEPENDER de timer. `expiraEm`
-//! está gravado, e `listOpen` trata como expirada toda pergunta cujo prazo já
-//! passou, no momento da leitura. O estado no disco é a verdade; o varredor
-//! abaixo só materializa isso pra quem espera. Reiniciar o processo não perde
-//! nada, porque não havia nada em memória pra perder.
-//!
-//! ## `getRange` e a chave
-//!
-//! `q:<criadaEm>:<rand>` — o prefixo dá o range, e o timestamp na chave dá a
-//! ORDEM sem índice secundário. RocksDB é ordenado por chave, e é isso que
-//! substitui o `index('por_estado')` que o Convex tinha: a varredura lê tudo do
-//! prefixo e filtra em memória, o que é barato enquanto "aberto" for dezenas.
-//! Se um dia for milhares, a saída é um segundo prefixo `open:` mantido junto —
-//! e aí é escrita dupla, que é o custo que ainda não se paga.
+//! `expiraEm` está gravado, e `listOpen` trata como expirada toda rodada cujo
+//! prazo já passou, no momento da LEITURA. O estado no disco é a verdade; o
+//! varredor abaixo só materializa isso. Reiniciar o processo não perde nada,
+//! porque não havia nada em memória pra perder.
 
 import { RocksDatabase } from '@harperfast/rocksdb-js'
 import { EventEmitter } from 'node:events'
 import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-export type Estado = 'OPEN' | 'ANSWERED' | 'SKIPPED' | 'EXPIRED'
+// ─── O CONTRATO ────────────────────────────────────────────────────────────────
 
-export type Opcao = { rotulo: string; descricao?: string }
+/** Uma opção. `preview` é markdown monoespaçado, mostrado lado a lado. */
+export type Opcao = {
+  /** 1-5 palavras. É o que a pessoa clica. */
+  label: string
+  /** A CONSEQUÊNCIA de escolher, não o sinônimo do label. */
+  description?: string
+  /** Mockup, snippet, diagrama. Só em pergunta de escolha única. */
+  preview?: string
+}
+
+export type Pergunta = {
+  /** A pergunta inteira, como o humano vai ler. */
+  question: string
+  /** O chip que rotula a pergunta na tela. Até 12 caracteres. */
+  header: string
+  /** 2 a 4. Menos é `enter` disfarçado; mais é a pessoa lendo em vez de decidir. */
+  options: Opcao[]
+  /** `true` quando as opções não são mutuamente exclusivas. */
+  multiSelect?: boolean
+}
+
+/** O que a pessoa devolveu numa pergunta. */
+export type Resposta = {
+  /** Os `label` escolhidos. Um só quando `multiSelect` é falso. */
+  escolhas: string[]
+  /** O texto livre do "Other" — a saída que TODA pergunta tem, sem ninguém pedir. */
+  outro?: string
+  /** O que ela escreveu ALÉM de escolher. */
+  anotacao?: string
+}
+
+export type Estado = 'OPEN' | 'ANSWERED' | 'SKIPPED' | 'EXPIRED'
 
 export type Origem = { agente?: string; pane?: string; run?: string; host?: string }
 
-export type Pergunta = {
+export type Rodada = {
   id: string
-  texto: string
-  opcoes: Opcao[]
+  perguntas: Pergunta[]
   origem: Origem
   estado: Estado
-  resposta?: { indice: number; escolha: string; em: number }
+  /** Endereçado pelo TEXTO da pergunta, igual ao `AskUserQuestion`. */
+  respostas?: Record<string, Resposta>
   criadaEm: number
   expiraEm: number
 }
 
+/** Os tetos do contrato. Não são sugestão: `abre()` recusa fora deles. */
+export const LIMITES = { perguntas: 4, opcoes: 4, header: 12 } as const
+
+// ─── O BANCO ───────────────────────────────────────────────────────────────────
+
 const CAMINHO = process.env.ASKUSER_DB ?? join(process.cwd(), '.data', 'askuser')
 
-// UM banco por processo. O Next recarrega módulos em dev, e abrir o RocksDB
-// duas vezes na mesma pasta dá lock — o global sobrevive ao hot reload.
 declare global {
   var __aqdb: RocksDatabase | undefined
   var __aqbus: EventEmitter | undefined
@@ -64,14 +94,10 @@ declare global {
  * PREGUIÇOSO, e isso não é otimização: é o que faz o build passar.
  *
  * Com `RocksDatabase.open()` no corpo do módulo, o `next build` abria o banco
- * durante a coleta de dados das páginas — e falhava, porque build não tem por
- * que tocar em banco nenhum. Medido em 19/08: `Failed to collect page data for
- * /api/stream`, com um erro de I/O que não dizia nada sobre build.
- *
- * E o RocksDB NÃO cria o diretório pai: ele faz `mkdir` só da última pasta, e
- * `.data/askuser` sem `.data` existindo vira `No such file or directory`.
+ * durante a coleta de dados das páginas e falhava com um erro de I/O que não
+ * dizia nada sobre build. E o RocksDB NÃO cria o diretório pai.
  */
-export function abre(): RocksDatabase {
+export function db(): RocksDatabase {
   if (!globalThis.__aqdb) {
     mkdirSync(CAMINHO, { recursive: true })
     globalThis.__aqdb = RocksDatabase.open(CAMINHO)
@@ -79,108 +105,143 @@ export function abre(): RocksDatabase {
   return globalThis.__aqdb
 }
 
-/** O barramento local. Uma tela ouve aqui via SSE; nada sai do processo. */
+/** O barramento local. A tela ouve por SSE; nada sai do processo. */
 export const bus: EventEmitter = (globalThis.__aqbus ??= new EventEmitter().setMaxListeners(0))
 
-const chave = (p: Pergunta) => `q:${p.criadaEm}:${p.id}`
+/** `r:<criadaEm>:<id>` — o prefixo dá o range, o timestamp dá a ORDEM sem índice. */
+const chave = (r: Rodada) => `r:${r.criadaEm}:${r.id}`
 
-/** Quatro estados, e o vencido conta como EXPIRED mesmo sem ninguém ter escrito. */
-function comPrazo(p: Pergunta, agora: number): Pergunta {
-  return p.estado === 'OPEN' && p.expiraEm <= agora ? { ...p, estado: 'EXPIRED' } : p
+function todas(): Rodada[] {
+  return [...db().getRange({ start: 'r:', end: 'r:\uffff' })].map((e: any) => e.value as Rodada)
 }
 
-function todas(): Pergunta[] {
-  return [...abre().getRange({ start: 'q:', end: 'q:\uffff' })].map((e: any) => e.value as Pergunta)
+/** Vencida conta como EXPIRED mesmo sem ninguém ter escrito. */
+const comPrazo = (r: Rodada, agora: number): Rodada =>
+  r.estado === 'OPEN' && r.expiraEm <= agora ? { ...r, estado: 'EXPIRED' } : r
+
+export function byId(id: string): Rodada | undefined {
+  const r = todas().find((x) => x.id === id)
+  return r && comPrazo(r, Date.now())
 }
 
-export function byId(id: string): Pergunta | undefined {
-  const agora = Date.now()
-  const p = todas().find((x) => x.id === id)
-  return p && comPrazo(p, agora)
-}
-
-export function listOpen(): Pergunta[] {
+export function listOpen(): Rodada[] {
   const agora = Date.now()
   return todas()
-    .map((p) => comPrazo(p, agora))
-    .filter((p) => p.estado === 'OPEN')
+    .map((r) => comPrazo(r, agora))
+    .filter((r) => r.estado === 'OPEN')
     .sort((a, b) => b.criadaEm - a.criadaEm)
 }
 
-export async function ask(args: {
-  texto: string
-  opcoes: Opcao[]
+/**
+ * As recusas do contrato, e elas moram AQUI porque este é o ponto que todo
+ * cliente atravessa — o CLI, a rota, e o que vier depois.
+ *
+ * Devolve a mensagem, ou `null` quando passa.
+ */
+export function critica(perguntas: Pergunta[]): string | null {
+  if (!perguntas.length) return 'nenhuma pergunta'
+  if (perguntas.length > LIMITES.perguntas)
+    return `${perguntas.length} perguntas: o teto é ${LIMITES.perguntas} — mais que isso a pessoa lê em vez de decidir`
+  for (const p of perguntas) {
+    if (!p.question?.trim()) return 'pergunta vazia'
+    if (!p.header?.trim()) return `"${p.question}": falta o header`
+    if (p.header.length > LIMITES.header)
+      return `header "${p.header}" tem ${p.header.length} chars: o teto é ${LIMITES.header}`
+    // DUAS é o piso: uma opção só é um `enter` disfarçado de decisão, e ela
+    // interrompe alguém pra nada.
+    if (!p.options || p.options.length < 2)
+      return `"${p.question}": ${p.options?.length ?? 0} opção(ões) — uma escolha precisa de duas`
+    if (p.options.length > LIMITES.opcoes)
+      return `"${p.question}": ${p.options.length} opções, o teto é ${LIMITES.opcoes}`
+    if (p.options.some((o) => !o.label?.trim())) return `"${p.question}": opção sem label`
+    // PREVIEW só em escolha única: o layout lado a lado mostra UM preview por
+    // vez, e com múltipla escolha não existe "o preview do que está focado".
+    if (p.multiSelect && p.options.some((o) => o.preview))
+      return `"${p.question}": preview não vale com multiSelect`
+  }
+  return null
+}
+
+export async function abre(args: {
+  perguntas: Pergunta[]
   origem: Origem
   vidaMs?: number
-}): Promise<Pergunta> {
-  // AS DUAS RECUSAS moram aqui porque este é o ponto que TODO cliente atravessa
-  // — o CLI, a rota HTTP, e o que vier depois. Uma pergunta com uma opção só é
-  // um `enter` disfarçado de decisão, e ela interrompe alguém pra nada.
-  if (!args.texto.trim()) throw new Error('pergunta vazia')
-  if (args.opcoes.length < 2)
-    throw new Error(`${args.opcoes.length} opção(ões): uma escolha precisa de duas`)
+}): Promise<Rodada> {
+  const erro = critica(args.perguntas)
+  if (erro) throw new Error(erro)
 
   const agora = Date.now()
-  const p: Pergunta = {
+  const r: Rodada = {
     id: crypto.randomUUID(),
-    texto: args.texto,
-    opcoes: args.opcoes,
+    perguntas: args.perguntas,
     origem: args.origem,
     estado: 'OPEN',
     criadaEm: agora,
     expiraEm: agora + (args.vidaMs ?? 30 * 60_000),
   }
-  await abre().put(chave(p), p)
+  await db().put(chave(r), r)
   bus.emit('mudou')
-  return p
+  return r
 }
 
 /**
- * Fecha uma pergunta UMA vez. Devolve `false` quando ela já estava fechada.
+ * Fecha uma rodada UMA vez. `false` quando ela já estava fechada.
  *
- * É o guard inteiro do sistema: dois cliques, ou o varredor expirando no mesmo
+ * É o guard inteiro do sistema: dois cliques, ou o prazo vencendo no mesmo
  * instante em que alguém responde, produziriam dois desfechos pro mesmo id — e
  * quem espera leria o último que chegou. Expirar contra uma resposta PERDE, e
  * perder é o certo: houve gente.
  */
-async function fecha(id: string, patch: Partial<Pergunta>): Promise<boolean> {
+async function fecha(id: string, patch: Partial<Rodada>): Promise<boolean> {
   const agora = Date.now()
-  const p = todas().find((x) => x.id === id)
-  if (!p || p.estado !== 'OPEN') return false
-  // Vencida já não aceita resposta: quem clicou está decidindo sobre um estado
-  // que o prazo fechou, e é exatamente a decisão tarde que este app evita.
-  if (patch.estado !== 'EXPIRED' && p.expiraEm <= agora) return false
-  await abre().put(chave(p), { ...p, ...patch })
+  const r = todas().find((x) => x.id === id)
+  if (!r || r.estado !== 'OPEN') return false
+  if (patch.estado !== 'EXPIRED' && r.expiraEm <= agora) return false
+  await db().put(chave(r), { ...r, ...patch })
   bus.emit('mudou')
   return true
 }
 
-export async function answer(id: string, indice: number): Promise<boolean> {
-  const p = todas().find((x) => x.id === id)
-  if (!p) throw new Error('pergunta não existe')
-  // ÍNDICE FORA DA FAIXA é erro, não resposta esquisita: aceitar gravaria uma
-  // `escolha` vazia que quem espera leria como decisão tomada.
-  if (indice < 0 || indice >= p.opcoes.length)
-    throw new Error(`índice ${indice} fora das ${p.opcoes.length} opções`)
-  return await fecha(id, {
-    estado: 'ANSWERED',
-    resposta: { indice, escolha: p.opcoes[indice].rotulo, em: Date.now() },
-  })
+/**
+ * Responde a rodada INTEIRA. Parcial não existe.
+ *
+ * O contrato é "uma interrupção, N decisões": aceitar três de quatro deixaria a
+ * rodada aberta esperando a quarta, e quem chamou não teria como usar as três —
+ * ele pediu as quatro porque precisa das quatro.
+ */
+export async function responde(id: string, respostas: Record<string, Resposta>): Promise<boolean> {
+  const r = todas().find((x) => x.id === id)
+  if (!r) throw new Error('rodada não existe')
+
+  for (const p of r.perguntas) {
+    const resp = respostas[p.question]
+    if (!resp) throw new Error(`falta a resposta de "${p.question}"`)
+    const tem = resp.escolhas.length > 0 || Boolean(resp.outro?.trim())
+    if (!tem) throw new Error(`"${p.question}": nem escolha nem texto livre`)
+    if (!p.multiSelect && resp.escolhas.length > 1)
+      throw new Error(`"${p.question}": ${resp.escolhas.length} escolhas numa pergunta de escolha única`)
+    // Um label que não está nas opções é erro, não resposta esquisita: aceitar
+    // gravaria uma escolha que quem chamou não sabe interpretar. Texto livre
+    // tem campo próprio (`outro`) justamente pra não passar por aqui.
+    const validos = new Set(p.options.map((o) => o.label))
+    const invalido = resp.escolhas.find((e) => !validos.has(e))
+    if (invalido) throw new Error(`"${p.question}": "${invalido}" não é uma das opções`)
+  }
+  return await fecha(id, { estado: 'ANSWERED', respostas })
 }
 
-/** Pular é ESTADO, não `resposta` vazia — "não quis decidir" ≠ "escolheu a 0". */
-export const skip = (id: string) => fecha(id, { estado: 'SKIPPED' })
+/** Pular é ESTADO, não resposta vazia — "não quis decidir" ≠ "escolheu a 1ª". */
+export const pula = (id: string) => fecha(id, { estado: 'SKIPPED' })
 
 /**
  * Materializa no disco o que a leitura já considerava vencido.
  *
  * Não é o relógio do sistema — o relógio é o `expiraEm` gravado, e ele vale
- * mesmo com este varredor parado. Isto existe só pra a linha no disco não
- * mentir pra quem for ler o histórico depois, e pra o `bus` avisar as telas.
+ * mesmo com este varredor parado.
  */
 export async function varreVencidas(): Promise<number> {
   const agora = Date.now()
-  const vencidas = todas().filter((p) => p.estado === 'OPEN' && p.expiraEm <= agora)
-  for (const p of vencidas) await fecha(p.id, { estado: 'EXPIRED' })
+  const vencidas = todas().filter((r) => r.estado === 'OPEN' && r.expiraEm <= agora)
+  for (const r of vencidas) await fecha(r.id, { estado: 'EXPIRED' })
   return vencidas.length
 }

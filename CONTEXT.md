@@ -14,8 +14,8 @@ scripts/
   shared.ts           o encanamento dela: config derivada, download do binário
   cli/askuser.ts      o comando. Cliente HTTP puro, zero dependência do ui/
   ui/                 o Next 15 + HeroUI + RocksDB — o app inteiro
-    lib/store.ts      o banco, os 4 estados, e o guard de uma-decisão-um-registro
-    lib/usePerguntas  SSE + refetch
+    lib/store.ts      o CONTRATO tipado, o banco, e o guard de uma-decisão-um-registro
+    lib/useRodadas    SSE + refetch
     app/page.tsx      a tela
     app/api/…         GET · POST · PATCH, e o SSE
 ```
@@ -42,6 +42,17 @@ bun scripts/cli/askuser.ts "pergunta?" -o "a|um" -o "b|dois"
 O banco nasce sozinho em `scripts/ui/.data/askuser` na primeira escrita.
 
 ## As regras que não se negociam
+
+**A unidade é a RODADA, não a pergunta.** Uma chamada carrega 1 a 4 perguntas
+respondidas JUNTAS: `estado`, `expiraEm` e `origem` são dela, e não existe rodada
+meio respondida. Aceitar três de quatro deixaria a rodada aberta esperando a
+quarta, e quem chamou não teria como usar as três — ele pediu as quatro porque
+precisa das quatro.
+
+**Os tetos do contrato são RECUSA, não sugestão** (`LIMITES` no `store.ts`): 4
+perguntas, 4 opções, header de 12 chars. Piso de 2 opções. `preview` não vale
+com `multiSelect`, porque o layout lado a lado mostra um por vez e não existe "o
+preview do que está focado".
 
 **As duas recusas ficam nos DOIS lados.** Pergunta vazia e menos de duas opções
 são recusadas no CLI (pra não gastar uma ida na rede) e no `store.ts` (porque o
@@ -83,7 +94,8 @@ o terminal e olhar" — se custar uma ida ao mouse, não compete.
 | se você mexer em | mexa também em |
 |---|---|
 | os quatro estados | `store.ts`, `askuser.ts` (os exit codes), `CLAUDE.md` |
-| a forma da rota | `askuser.ts`, `usePerguntas.ts` |
+| a forma da rota | `cli/askuser.ts`, `useRodadas.ts` |
+| o contrato (campos, tetos) | `store.ts`, `cli/askuser.ts`, `SKILL.md`, `GOAL.md` do projeto |
 | o nome de um env var | `SKILL.md`, `README.md`, `CONTEXT.md` |
 | as opções da janela | `askuser.ts` (os tipos), `shared.ts` (a config) |
 
