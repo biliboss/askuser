@@ -288,8 +288,15 @@ export async function responde(id: string, respostas: Record<string, Resposta>):
     if (!resp) throw new Error(`falta a resposta de "${p.question}"`)
     const tem = resp.escolhas.length > 0 || Boolean(resp.outro?.trim())
     if (!tem) throw new Error(`"${p.question}": nem escolha nem texto livre`)
-    if (!p.multiSelect && resp.escolhas.length > 1)
-      throw new Error(`"${p.question}": ${resp.escolhas.length} escolhas numa pergunta de escolha única`)
+    // MAIS DE UMA ESCOLHA PASSA, mesmo sem `multiSelect`. O chamador PEDE uma;
+    // quem responde às vezes tem duas, e a diferença entre "gostei do 3 e do 5"
+    // e "3" é informação que só existe se couber. Recusar aqui obrigaria a
+    // pessoa a jogar a segunda no texto livre — onde quem chamou não consegue
+    // ler como escolha.
+    //
+    // `multiSelect` continua significando algo: é o CONVITE. Sem ele a tela
+    // trata a escolha como única e só o ⌘+dígito acrescenta — quem responde tem
+    // que querer.
     // Um label que não está nas opções é erro, não resposta esquisita: aceitar
     // gravaria uma escolha que quem chamou não sabe interpretar. Texto livre
     // tem campo próprio (`outro`) justamente pra não passar por aqui.

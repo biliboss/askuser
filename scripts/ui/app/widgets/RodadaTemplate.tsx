@@ -19,6 +19,7 @@
 //! ## Os atalhos, e por que cada um é o que é
 //!
 //!   1..9    MARCA a opção na pergunta em foco (9 só em `layout: "grid"`)
+//!   ⌘1..⌘9  SOMA à seleção, mesmo numa pergunta de escolha única
 //!   o dígito SEGUINTE   foca o "outra resposta"
 //!   ⏎       vai pra próxima que ainda não tem resposta
 //!   j / k   próxima / anterior — as do vim, e a mão já sabe
@@ -88,18 +89,29 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
   })()
 
   const escolhe = useCallback(
-    (q: number, label: string) => {
+    /**
+     * `aditivo` = ⌘+dígito, ou ⌘+clique: SOMA à seleção mesmo numa pergunta de
+     * escolha única.
+     *
+     * Quem pergunta pede uma; quem responde às vezes tem duas — "gostei do
+     * Dracula e do Nord" é uma resposta melhor que "Dracula", e sem isto ela
+     * teria que ir pro texto livre, onde quem chamou não lê como escolha.
+     *
+     * `multiSelect` não virou decoração: ele é o CONVITE. Sem ele a tela trata
+     * como escolha única e só o modificador soma — a segunda escolha exige
+     * intenção, em vez de acontecer por acidente.
+     */
+    (q: number, label: string, aditivo = false) => {
       const p = rodada.perguntas[q]
       setRespostas((atual) => {
         const anterior = atual[p.question] ?? vazia()
-        // MULTISELECT alterna; escolha única substitui. É a diferença entre
-        // "marque os que valem" e "escolha um", e trocar uma pela outra faria a
-        // pessoa clicar duas vezes achando que somou.
-        const escolhas = p.multiSelect
-          ? anterior.escolhas.includes(label)
+        const alterna = () =>
+          anterior.escolhas.includes(label)
             ? anterior.escolhas.filter((e) => e !== label)
             : [...anterior.escolhas, label]
-          : [label]
+        // MULTISELECT alterna; escolha única substitui — a diferença entre
+        // "marque os que valem" e "escolha um". `aditivo` alterna nas duas.
+        const escolhas = p.multiSelect || aditivo ? alterna() : [label]
         return { ...atual, [p.question]: { ...anterior, escolhas } }
       })
       // ESCOLHER NÃO AVANÇA. O foco andava sozinho na escolha única, e o efeito
@@ -162,7 +174,12 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
       // o que torna a comparação respondível sem tirar a mão do teclado.
       const n = Number(e.key)
       const quantasOpcoes = pergunta?.options.length ?? 0
-      if (n >= 1 && n <= quantasOpcoes) return escolhe(foco, pergunta.options[n - 1].label)
+      // ⌘+dígito SOMA à seleção; o dígito sozinho substitui. Numa comparação de
+      // nove, "gostei destes dois" é resposta legítima.
+      if (n >= 1 && n <= quantasOpcoes) {
+        e.preventDefault()
+        return escolhe(foco, pergunta.options[n - 1].label, e.metaKey || e.ctrlKey)
+      }
       // O DÍGITO SEGUINTE é o "outra resposta" — o campo era a única resposta
       // possível fora do alcance do teclado. `preventDefault` porque senão o
       // próprio dígito entraria no campo que ele acabou de focar.
@@ -278,7 +295,7 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
               <QuestionInFocusWidget
                 pergunta={pergunta}
                 resposta={respostas[pergunta.question] ?? vazia()}
-                onEscolhe={(label) => escolhe(foco, label)}
+                onEscolhe={(label, aditivo) => escolhe(foco, label, aditivo)}
                 onEscreve={(campo, v) => escreve(foco, campo, v)}
                 mostraAtalhos={ativa}
                 mostraHeader={rodada.perguntas.length < 2}

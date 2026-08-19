@@ -31,8 +31,8 @@ const colunasDaGrid = (n: number) => Math.min(3, Math.ceil(Math.sqrt(n)))
 export type QuestionInFocusWidgetProps = {
   pergunta: Pergunta
   resposta: Resposta
-  /** Alterna em `multiSelect`, substitui em escolha única — quem decide é o pai. */
-  onEscolhe: (label: string) => void
+  /** `aditivo` (⌘+clique) soma à seleção mesmo em escolha única. */
+  onEscolhe: (label: string, aditivo?: boolean) => void
   onEscreve: (campo: 'outro' | 'anotacao', v: string) => void
   /** Os `kbd` dos dígitos. Falso quando outra coisa tem o teclado. */
   mostraAtalhos?: boolean
@@ -92,7 +92,8 @@ export function QuestionInFocusWidget({
               <button
                 key={o.label}
                 type="button"
-                onClick={() => onEscolhe(o.label)}
+                // ⌘+clique soma, igual ao ⌘+dígito — mouse e teclado fazem a mesma coisa.
+                onClick={(e) => onEscolhe(o.label, e.metaKey || e.ctrlKey)}
                 aria-pressed={marcada}
                 className={`flex flex-col gap-1.5 rounded-xl border-2 p-1.5 text-left transition-colors ${
                   marcada ? 'border-primary bg-primary-50' : 'border-default-200 hover:border-default-400'
@@ -123,7 +124,7 @@ export function QuestionInFocusWidget({
                   variant={marcada ? 'solid' : 'bordered'}
                   color={marcada ? 'primary' : 'default'}
                   className="h-auto w-full justify-start px-4 py-3 text-left"
-                  onPress={() => onEscolhe(o.label)}
+                  onPress={(e) => onEscolhe(o.label, (e as unknown as MouseEvent).metaKey)}
                 >
                   <span className="flex-1">
                     <span className="block font-semibold">{o.label}</span>

@@ -56,7 +56,7 @@ export default function Page() {
         <RodadaTemplate key={r.id} rodada={r} agora={agora} ativa={r.id === ativa} onFecha={fecha} />
       ))}
       <p className="pt-2 text-center text-xs text-default-400">
-        <kbd className="font-mono">1-9</kbd> escolhe · <kbd className="font-mono">+1</kbd> outra · <kbd className="font-mono">j</kbd>
+        <kbd className="font-mono">1-9</kbd> escolhe · <kbd className="font-mono">⌘1-9</kbd> soma · <kbd className="font-mono">+1</kbd> outra · <kbd className="font-mono">j</kbd>
         <kbd className="font-mono">k</kbd> navega · <kbd className="font-mono">⏎</kbd> avança · <kbd className="font-mono">⌘⏎</kbd> confirma ·{' '}
         <kbd className="font-mono">segure esc</kbd> pula
       </p>
