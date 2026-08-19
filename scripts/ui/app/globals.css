@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+/* A ORDEM DAS CAMADAS é declarada antes do plugin: sem isto o CSS do HeroUI
+   entra depois das utilities e ganha de `className` que deveria sobrescrever —
+   e o sintoma é um `bg-red-500` que "não funciona" sem erro nenhum. */
+@layer theme, base, components, utilities;
+
+@plugin './hero.ts';
+@source '../node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}';
+
+/* O tema segue o SISTEMA. Uma janela que pergunta não é hora de discordar do
+   modo escuro de quem está olhando. */
+@custom-variant dark (&:where(.dark, .dark *));

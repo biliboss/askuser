@@ -1,0 +1,35 @@
+{
+  "name": "askuser",
+  "private": false,
+  "scripts": {
+    "dev": "next dev -p 5311",
+    "build": "next build",
+    "start": "next start -p 5311",
+    "app": "cd src-tauri && cargo run --release",
+    "app:build": "cd src-tauri && cargo build --release"
+  },
+  "dependencies": {
+    "@harperfast/rocksdb-js": "^2.7.1",
+    "@heroui/react": "^2.8.4",
+    "next": "15.5.4",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.1.13",
+    "tailwindcss": "4.1.13",
+    "typescript": "5.9.2",
+    "@types/react": "19.1.13",
+    "@types/node": "24.5.2"
+  },
+  "version": "0.1.0",
+  "description": "Pergunta pra uma pessoa e espera a resposta, de dentro de um script. Quatro sa\u00eddas: escolheu, pulou, expirou, erro.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/biliboss/askuser"
+  },
+  "bin": {
+    "askuser": "./bin/askuser.ts"
+  }
+}
