@@ -69,6 +69,20 @@ export type Opcoes = Partial<Tamanho> & {
    * precisa mover.
    */
   borderless?: boolean
+  /**
+   * **Padrão `true`: a janela abre em tela cheia.**
+   *
+   * Decisão do Gabriel em 19/08, com o custo na mesa: no macOS o fullscreen move
+   * a janela pra um Space NOVO — ela deixa de estar por cima do que a pessoa
+   * fazia, e voltar ao trabalho pede um swipe. Foi escolhido mesmo assim, e a
+   * razão vence a objeção: uma pergunta merece a tela inteira. Metade de uma
+   * comparação de nove é uma comparação que não aconteceu, e uma janela
+   * flutuante grande já obrigava a mexer nela antes de responder.
+   *
+   * `false` devolve a janela flutuante dimensionada pela rodada
+   * (`larguraPara`/`alturaPara`), pra quem prefere responder sem trocar de Space.
+   */
+  fullScreen?: boolean
 }
 
 /** O processo do Neutralino. `kill()` fecha a janela; `exited` é a promessa do fim. */

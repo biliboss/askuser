@@ -32,15 +32,35 @@ import { join } from 'node:path'
 
 // ─── O CONTRATO ────────────────────────────────────────────────────────────────
 
-/** Uma opção. `preview` é markdown monoespaçado, mostrado lado a lado. */
+/** Uma opção. `preview` é o que a opção MOSTRA — diagrama, HTML, ou texto. */
 export type Opcao = {
   /** 1-5 palavras. É o que a pessoa clica. */
   label: string
   /** A CONSEQUÊNCIA de escolher, não o sinônimo do label. */
   description?: string
-  /** Mockup, snippet, diagrama. Só em pergunta de escolha única. */
+  /**
+   * Mockup, snippet, diagrama. Só em pergunta de escolha única.
+   *
+   * O TIPO SAI DO CONTEÚDO, não de um campo: `flowchart`/`sequenceDiagram`/… é
+   * mermaid, `<` na primeira coluna é HTML, o resto é monoespaçado. Um campo
+   * `tipo:` seria mais uma coisa pro chamador acertar — e errar — enquanto o
+   * texto já se identifica sozinho.
+   */
   preview?: string
 }
+
+/**
+ * Como as opções são apresentadas.
+ *
+ * `lista` é o padrão: uma embaixo da outra, com o label em destaque. É o certo
+ * quando a escolha se resolve LENDO — o label diz o que é e a description diz o
+ * que acontece.
+ *
+ * `grid` é pra quando a escolha se resolve OLHANDO: nove diagramas, nove
+ * variações de um botão, quatro layouts. Aí a comparação é visual e paralela, o
+ * preview vira o corpo do cartão e o label vira legenda.
+ */
+export type Layout = 'lista' | 'grid'
 
 export type Pergunta = {
   /** A pergunta inteira, como o humano vai ler. */
@@ -62,6 +82,19 @@ export type Pergunta = {
   options: Opcao[]
   /** `true` quando as opções não são mutuamente exclusivas. */
   multiSelect?: boolean
+  /**
+   * `grid` compara até **9** opções lado a lado; `lista` (o padrão) vai até 4.
+   *
+   * O teto de 4 existe porque "mais que isso a pessoa lê em vez de decidir" — e
+   * é verdade quando decidir significa LER. Comparar nove diagramas é outra
+   * tarefa: o olho varre a grid em paralelo, e cortar em 4 obrigaria a partir a
+   * comparação em duas rodadas, que é onde a comparação morre — ninguém compara
+   * o que não está na mesma tela.
+   *
+   * Nove é o teto porque 3×3 é a última grade que cabe numa janela sem o cartão
+   * ficar pequeno demais pra mostrar o que se está comparando.
+   */
+  layout?: Layout
 }
 
 /** O que a pessoa devolveu numa pergunta. */
@@ -90,7 +123,15 @@ export type Rodada = {
 }
 
 /** Os tetos do contrato. Não são sugestão: `abre()` recusa fora deles. */
-export const LIMITES = { perguntas: 4, opcoes: 4, header: 12, palavrasDaDescricao: 7 } as const
+export const LIMITES = {
+  perguntas: 4,
+  opcoes: 4,
+  /** `layout: 'grid'` — comparação visual, e o olho varre em paralelo. */
+  opcoesEmGrid: 9,
+  header: 12,
+  palavrasDaDescricao: 7,
+} as const
+
 
 // ─── O BANCO ───────────────────────────────────────────────────────────────────
 
@@ -167,13 +208,20 @@ export function critica(perguntas: Pergunta[]): string | null {
     // interrompe alguém pra nada.
     if (!p.options || p.options.length < 2)
       return `"${p.question}": ${p.options?.length ?? 0} opção(ões) — uma escolha precisa de duas`
-    if (p.options.length > LIMITES.opcoes)
-      return `"${p.question}": ${p.options.length} opções, o teto é ${LIMITES.opcoes}`
+    // O TETO DEPENDE DO LAYOUT: em lista, 4, porque a partir daí a pessoa lê em
+    // vez de decidir; em grid, 9, porque comparar é outra tarefa.
+    const teto = p.layout === 'grid' ? LIMITES.opcoesEmGrid : LIMITES.opcoes
+    if (p.options.length > teto)
+      return `"${p.question}": ${p.options.length} opções, o teto é ${teto}${p.layout === 'grid' ? '' : ` (ou ${LIMITES.opcoesEmGrid} com layout: "grid")`}`
     if (p.options.some((o) => !o.label?.trim())) return `"${p.question}": opção sem label`
     // PREVIEW só em escolha única: o layout lado a lado mostra UM preview por
     // vez, e com múltipla escolha não existe "o preview do que está focado".
-    if (p.multiSelect && p.options.some((o) => o.preview))
+    if (p.multiSelect && p.options.some((o) => o.preview) && p.layout !== 'grid')
       return `"${p.question}": preview não vale com multiSelect`
+    // GRID SEM PREVIEW é uma lista com espaço sobrando: a grid existe pra
+    // comparar o que se VÊ, e sem preview não há o que comparar.
+    if (p.layout === 'grid' && !p.options.every((o) => o.preview?.trim()))
+      return `"${p.question}": layout "grid" pede preview em TODA opção — é o que se compara`
   }
   return null
 }

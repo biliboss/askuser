@@ -35,7 +35,7 @@
  */
 
 import { askuser as abreJanela } from '../askuser.ts'
-import { alturaPara, garanteApp } from '../shared.ts'
+import { alturaPara, garanteApp, larguraPara } from '../shared.ts'
 
 const APP = process.env.ASKUSER_URL ?? 'http://127.0.0.1:5311'
 
@@ -51,7 +51,13 @@ const USO = `askuser — pergunta pra uma pessoa e espera a decisão
   -t, --minutos   quanto ela vive antes de expirar (padrão 30)
       --json      só o JSON, sem a linha legível
 
-  spec: {"perguntas":[{"question","header","description"?,"multiSelect"?,"options":[{"label","description"?,"preview"?}]}]}
+  ASKUSER_WINDOWED=1  janela flutuante em vez de tela cheia
+  ASKUSER_NO_WINDOW=1 sem janela nenhuma — responde pelo navegador
+
+  spec: {"perguntas":[{"question","header","description"?,"multiSelect"?,"layout"?:"grid","options":[{"label","description"?,"preview"?}]}]}
+
+  layout "grid": até 9 opções lado a lado, cada uma com preview (mermaid, HTML ou texto).
+  Serve pra escolha que se resolve OLHANDO — nove diagramas, nove variações de um botão.
 
   saída: 0 escolheu · 2 pulou · 3 expirou · 1 erro`
 
@@ -63,6 +69,8 @@ type Pergunta = {
   description?: string
   options: Opcao[]
   multiSelect?: boolean
+  /** `grid` compara até 9 previews lado a lado; `lista` (padrão) vai até 4. */
+  layout?: 'lista' | 'grid'
 }
 
 /** `label|descrição`. A PRIMEIRA barra separa — label com barra continua inteiro. */
@@ -182,7 +190,14 @@ export async function main(argv: string[]): Promise<number> {
   // uma rodada de duas perguntas com `confirmar` fora da tela.
   const janela = process.env.ASKUSER_NO_WINDOW
     ? null
-    : await abreJanela({ height: alturaPara(perguntas) }).catch(() => null)
+    : await abreJanela({
+        // A janela abre em TELA CHEIA (padrão). Largura e altura seguem indo
+        // porque `ASKUSER_WINDOWED=1` devolve a janela flutuante, e aí ela
+        // precisa nascer do tamanho da rodada.
+        height: alturaPara(perguntas),
+        width: larguraPara(perguntas),
+        fullScreen: !process.env.ASKUSER_WINDOWED,
+      }).catch(() => null)
 
   // POLLING de 1s. O processo já está bloqueado; um segundo é imperceptível pra
   // quem decide. O VENCIMENTO não depende de nada rodando: `expiraEm` está

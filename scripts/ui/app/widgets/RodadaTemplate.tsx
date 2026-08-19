@@ -18,7 +18,7 @@
 //!
 //! ## Os atalhos, e por que cada um é o que é
 //!
-//!   1..4    MARCA a opção na pergunta em foco — e para aí
+//!   1..9    MARCA a opção na pergunta em foco (9 só em `layout: "grid"`)
 //!   o dígito SEGUINTE   foca o "outra resposta"
 //!   ⏎       vai pra próxima que ainda não tem resposta
 //!   j / k   próxima / anterior — as do vim, e a mão já sabe
@@ -158,6 +158,8 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
       if (e.key === 'j' || e.key === 'J') return setFoco((f) => (f + 1) % quantas)
       if (e.key === 'k' || e.key === 'K') return setFoco((f) => (f - 1 + quantas) % quantas)
 
+      // 1..9: em `layout: "grid"` são até nove opções, e um dígito por cartão é
+      // o que torna a comparação respondível sem tirar a mão do teclado.
       const n = Number(e.key)
       const quantasOpcoes = pergunta?.options.length ?? 0
       if (n >= 1 && n <= quantasOpcoes) return escolhe(foco, pergunta.options[n - 1].label)
@@ -226,7 +228,7 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
       shadow="sm"
       className={`border outline-none ${ativa ? 'border-primary rodada-chegou' : 'border-default-200'}`}
     >
-      <CardHeader className="flex items-center justify-between gap-3 pb-2">
+      <CardHeader className="flex items-center justify-between gap-3 px-3 pb-2 pt-3">
         <div className="flex flex-wrap gap-1.5">
           {/* A ORIGEM é o que impede decidir sobre estado que já mudou: saber QUE
               agente, em que run, é metade do contexto. O `?.` cobre o que já está
@@ -252,20 +254,25 @@ export function RodadaTemplate({ rodada, agora, ativa, onFecha }: RodadaTemplate
         </Chip>
       </CardHeader>
 
-      <CardBody className="gap-4 pt-0">
+      <CardBody className="gap-3 px-3 pb-3 pt-0">
         {/* O PAI dita o tamanho: a lista tem largura fixa porque é uma coluna de
             rótulos curtos; o foco fica com o resto. Numa janela estreita elas
             empilham — e a lista continua sendo a primeira, que é a ordem certa
             pra saber quantas decisões vêm. */}
         <div className="flex flex-row gap-5">
-          <div className="w-32 shrink-0">
-            <SideQuestionListWidget
-              perguntas={rodada.perguntas}
-              foco={foco}
-              respostas={respostas}
-              onFoco={setFoco}
-            />
-          </div>
+          {/* A COLUNA SÓ EXISTE COM LISTA. Com uma pergunta o widget devolve
+              `null`, e um `w-32` vazio ao lado dele é 128px de nada — visível
+              numa grid, onde cada pixel vira cartão maior. */}
+          {rodada.perguntas.length > 1 && (
+            <div className="w-32 shrink-0">
+              <SideQuestionListWidget
+                perguntas={rodada.perguntas}
+                foco={foco}
+                respostas={respostas}
+                onFoco={setFoco}
+              />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             {pergunta && (
               <QuestionInFocusWidget

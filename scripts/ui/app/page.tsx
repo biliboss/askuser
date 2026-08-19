@@ -47,12 +47,16 @@ export default function Page() {
     )
 
   return (
-    <main className="mx-auto max-w-3xl space-y-4 p-4 sm:p-6">
+        /* SEM `max-w`: quem define a largura é a JANELA, e ela já foi dimensionada
+       pela rodada (`larguraPara`). Um teto aqui fazia uma grid 3×3 numa janela de
+       948px desenhar em 768 e sobrar margem dos dois lados — o pai mandava e o
+       filho ignorava. */
+    <main className="w-full space-y-3 p-3">
       {rodadas.map((r) => (
         <RodadaTemplate key={r.id} rodada={r} agora={agora} ativa={r.id === ativa} onFecha={fecha} />
       ))}
       <p className="pt-2 text-center text-xs text-default-400">
-        <kbd className="font-mono">1-4</kbd> escolhe · <kbd className="font-mono">+1</kbd> outra · <kbd className="font-mono">j</kbd>
+        <kbd className="font-mono">1-9</kbd> escolhe · <kbd className="font-mono">+1</kbd> outra · <kbd className="font-mono">j</kbd>
         <kbd className="font-mono">k</kbd> navega · <kbd className="font-mono">⏎</kbd> avança · <kbd className="font-mono">⌘⏎</kbd> confirma ·{' '}
         <kbd className="font-mono">segure esc</kbd> pula
       </p>

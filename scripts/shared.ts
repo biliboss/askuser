@@ -8,6 +8,9 @@
 //! BAIXO garante que o app HTTP existe pra alguém perguntar.
 
 import type { Opcoes } from './askuser.ts'
+
+/** O bastante da pergunta pra dimensionar a janela. O contrato inteiro é do app. */
+export type Pergunta = { options: { preview?: string }[]; layout?: 'lista' | 'grid' }
 import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -56,7 +59,11 @@ export function escreveConfig(o: Opcoes): void {
             minWidth: 360,
             minHeight: 280,
             center: true,
-            fullScreen: false,
+            // TELA CHEIA por padrão. O custo no macOS é um Space novo — a janela
+            // sai de cima do que a pessoa fazia e voltar pede um swipe. Escolhido
+            // com esse custo na mesa: uma pergunta merece a tela inteira, e meia
+            // comparação de nove é uma comparação que não aconteceu.
+            fullScreen: o.fullScreen ?? true,
             // ALWAYS ON TOP é o motivo desta janela existir. Sem isto ela é uma
             // aba de navegador com bordas diferentes.
             alwaysOnTop: o.alwaysOnTop ?? true,
@@ -102,12 +109,35 @@ export function escreveConfig(o: Opcoes): void {
  * ali a pergunta rola dentro do card. Rolar é melhor que uma janela maior que a
  * tela, que não dá pra arrastar de volta.
  */
-export function alturaPara(perguntas: { options: { preview?: string }[] }[]): number {
+/**
+ * A LARGURA. 560 serve pra uma coluna de opções; uma grid 3×3 de diagramas nela
+ * daria cartões de 150px, e comparar o que não dá pra ver não é comparar.
+ *
+ * O teto de 1200 é a tela: acima disso a janela passa de um laptop, e uma janela
+ * maior que a tela não dá pra arrastar de volta.
+ */
+export function larguraPara(perguntas: Pergunta[]): number {
+  const colunas = Math.max(
+    1,
+    ...perguntas.map((p) => (p.layout === 'grid' ? Math.min(3, Math.ceil(Math.sqrt(p.options.length))) : 1)),
+  )
+  // 128 é a lista lateral, e ela só existe com 2+ perguntas — com uma, esses
+  // pixels não são pedidos. 280 por coluna é o menor cartão em que um diagrama
+  // de 3-4 nós ainda se lê.
+  const lista = perguntas.length > 1 ? 128 + 20 : 0
+  return colunas === 1 ? 560 : Math.min(1200, lista + 40 + 280 * colunas)
+}
+
+export function alturaPara(perguntas: Pergunta[]): number {
   // Régua de 19/08 no layout com foco: 1 pergunta com 2/3/4 opções (label +
   // description) mediu 491 / 569 / 647 de página. Reta perfeita — 78 por opção,
   // 335 de moldura (origem, prazo, enunciado, os dois campos livres, os botões).
-  const alturaDe = (p: { options: { preview?: string }[] }) =>
-    335 +
+  const alturaDe = (p: Pergunta) =>
+    // GRID: as opções não empilham — o que soma é a LINHA. Cada linha é o cartão
+    // (preview de 160 + legenda) mais o vão.
+    p.layout === 'grid'
+      ? 300 + 265 * Math.ceil(p.options.length / Math.min(3, Math.ceil(Math.sqrt(p.options.length))))
+      : 335 +
     78 * p.options.length +
     // PREVIEW é a única coisa que o número de opções não prevê: um diagrama
     // mermaid ocupa o que ocupa. 200 por opção com preview é o suficiente pros
