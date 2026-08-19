@@ -11,7 +11,8 @@
 //! ela não compete.
 //!
 //!   1..4   escolhe a opção na pergunta FOCADA
-//!   ⌘N     pula pra próxima pergunta da rodada (N de next)
+//!   j / k  próxima / anterior — as do vim, e as que a mão já sabe
+//!   ⌘N     próxima também (N de next), pra quem não pensa em vim
 //!   esc    pula a rodada inteira
 //!   ⏎      confirma, quando toda pergunta tem resposta
 //!
@@ -104,10 +105,17 @@ function CardRodada({
       }
       if (e.key === 'Escape') return onFecha(rodada.id)
       if (e.key === 'Enter' && tudoPronto) return onFecha(rodada.id, respostas)
+      // J/K sem modificador, além do ⌘N: pedido do Gabriel na primeira rodada
+      // real (19/08). São teclas do vim, ficam sob os dedos, e não competem com
+      // nada — os dígitos escolhem, e digitar acontece dentro dos campos, que a
+      // guarda acima já devolveu. K sobe porque em vim K sobe.
+      const quantas = rodada.perguntas.length
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault()
-        return setFoco((f) => (f + 1) % rodada.perguntas.length)
+        return setFoco((f) => (f + 1) % quantas)
       }
+      if (e.key === 'j' || e.key === 'J') return setFoco((f) => (f + 1) % quantas)
+      if (e.key === 'k' || e.key === 'K') return setFoco((f) => (f - 1 + quantas) % quantas)
       const n = Number(e.key)
       if (n >= 1 && n <= (pergunta?.options.length ?? 0)) escolhe(foco, pergunta.options[n - 1].label)
     }
@@ -272,8 +280,9 @@ export default function Page() {
         <CardRodada key={r.id} rodada={r} agora={agora} ativa={r.id === ativa} onFecha={fecha} />
       ))}
       <p className="text-xs text-default-400 text-center pt-2">
-        <kbd className="font-mono">1-4</kbd> escolhe · <kbd className="font-mono">⌘N</kbd> próxima
-        pergunta · <kbd className="font-mono">⏎</kbd> confirma · <kbd className="font-mono">esc</kbd> pula
+        <kbd className="font-mono">1-4</kbd> escolhe · <kbd className="font-mono">j</kbd>
+        <kbd className="font-mono">k</kbd> navega · <kbd className="font-mono">⏎</kbd> confirma ·{' '}
+        <kbd className="font-mono">esc</kbd> pula
       </p>
     </main>
   )
