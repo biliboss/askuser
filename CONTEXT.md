@@ -10,6 +10,8 @@ SKILL.md              a skill — é o que um agente lê pra saber USAR
 CLAUDE.md             o porquê: o problema, e as três decisões que o definem
 CONTEXT.md            este arquivo
 scripts/
+  askuser.ts          a JANELA — o contrato tipado, e `askuser()` que sobe o Neutralino
+  shared.ts           o encanamento dela: config derivada, download do binário
   cli/askuser.ts      o comando. Cliente HTTP puro, zero dependência do ui/
   ui/                 o Next 15 + HeroUI + RocksDB — o app inteiro
     lib/store.ts      o banco, os 4 estados, e o guard de uma-decisão-um-registro
@@ -17,6 +19,14 @@ scripts/
     app/page.tsx      a tela
     app/api/…         GET · POST · PATCH, e o SSE
 ```
+
+**Os TIPOS moram no `askuser.ts`, a implementação no `shared.ts`.** O outline de
+um lê como API e o do outro como oficina. Quem abre pra saber o que dá pra pedir
+não deveria encontrar `mkdirSync`.
+
+**A janela é SUPERFÍCIE, não peça.** O app funciona sem ela, o CLI funciona sem
+ela, e ela cair não impede ninguém de perguntar nem de responder. Por isso
+`askuser()` não espera: devolve o processo e quem chamou decide o que fazer.
 
 **O `cli/` não importa nada do `ui/`.** Ele fala HTTP com o app, e é por isso que
 roda em qualquer máquina apontando `ASKUSER_URL` pra outra. Se algum dia ele
@@ -56,6 +66,15 @@ explode em produção — falha tardia, que é a pior.
 erro de I/O que não fala de build. E o RocksDB **não cria o diretório pai**: é
 `mkdirSync(recursive)` antes de abrir.
 
+**Neutralino, e nada mais pesado.** A janela usa a WebView do sistema e um
+binário de ~2MB. Tauri (toolchain Rust, `target/` de ~1GB) e Electrobun
+(`node_modules` de 107M) foram tentados e apagados em 19/08 — os dois
+contradiziam a tese do `CLAUDE.md` pra entregar uma janela.
+
+**Todo campo numérico da config vai EXPLÍCITO**, inclusive `port: 0`. Omitir um
+mata o binário em `libc++abi: type must be number, but is null` — exceção de C++
+que não nomeia o campo. A janela abre e fecha no mesmo instante, sem log útil.
+
 **O teclado é do usuário.** Número escolhe, `esc` pula. O app compete com "abrir
 o terminal e olhar" — se custar uma ida ao mouse, não compete.
 
@@ -66,6 +85,7 @@ o terminal e olhar" — se custar uma ida ao mouse, não compete.
 | os quatro estados | `store.ts`, `askuser.ts` (os exit codes), `CLAUDE.md` |
 | a forma da rota | `askuser.ts`, `usePerguntas.ts` |
 | o nome de um env var | `SKILL.md`, `README.md`, `CONTEXT.md` |
+| as opções da janela | `askuser.ts` (os tipos), `shared.ts` (a config) |
 
 ## Provado, e como reprovar
 

@@ -89,6 +89,21 @@ Hoje: se o app está de pé, perguntar funciona. E quando ele não está, você 
 `1` com a mensagem do que subir — porque *"não consegui perguntar"* precisa ser
 diferente de *"perguntei e ninguém respondeu"*.
 
+### A janela, se você quiser
+
+```bash
+bun scripts/askuser.ts
+```
+
+**Neutralino**: WebView do sistema, binário de ~2MB baixado uma vez. Sem Rust,
+sem Chromium, sem runtime embutido.
+
+Ela carrega a mesma tela do navegador. O que acrescenta é **ficar por cima de
+tudo** — porque uma aba atrás de outras quinze é o mesmo problema de ninguém ver
+a pergunta.
+
+E ela **não está no caminho**: o app funciona sem ela, o CLI funciona sem ela.
+
 ---
 
 ## O prazo é dado, não processo

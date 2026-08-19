@@ -82,6 +82,18 @@ cd scripts/ui && bun install && bun run start     # 5311
 Uma peça só: Next com RocksDB embutido, sem Docker e sem daemon. O banco nasce
 sozinho em `scripts/ui/.data/askuser`.
 
+## A janela, opcional
+
+```bash
+bun scripts/askuser.ts        # abre por cima de tudo, em ASKUSER_URL
+```
+
+Neutralino: WebView do sistema, binário de ~2MB baixado na primeira vez. Carrega
+a MESMA tela do navegador — o que ela acrescenta é `alwaysOnTop`, e é o ponto: uma
+aba atrás de outras quinze é o mesmo problema de ninguém ver a pergunta.
+
+Ela não está no caminho. O app e o CLI funcionam sem ela.
+
 ## Quando NÃO usar
 
 - **Pra avisar.** Isto bloqueia; notificação não bloqueia.

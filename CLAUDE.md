@@ -67,6 +67,21 @@ funciona. E quando ele NÃO está, o CLI sai com `1` e uma mensagem que diz o qu
 subir — porque "não consegui perguntar" tem que ser distinguível de "perguntei e
 ninguém respondeu".
 
+### 4. A tela é uma, as superfícies são várias
+
+Navegador, celular, e uma janela nativa opcional — todas carregam **a mesma
+tela**. Nenhuma tem frontend próprio, porque duplicar criaria uma segunda verdade
+que diverge na primeira edição.
+
+A janela usa **Neutralino** (WebView do sistema, ~2MB). Tauri e Electrobun foram
+tentados e apagados em 19/08: o primeiro pedia toolchain Rust e ~1GB de `target/`,
+o segundo 107M de `node_modules`. Os dois contradiziam a decisão 3 pra entregar um
+enfeite, e contradizer a própria tese é o que ninguém percebe até virar
+manutenção.
+
+O que a janela acrescenta é a única coisa que o navegador não dá: ficar por cima.
+Uma aba atrás de outras quinze é o problema deste projeto de volta.
+
 ## O que este projeto NÃO é
 
 - **Não é notificação.** Notificação avisa; isto BLOQUEIA até haver decisão.
